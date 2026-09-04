@@ -6,7 +6,7 @@
 #define MyAppName "Cloudflare Bulk Domain Tool"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Skylark"
-#define MyAppURL "https://github.com/skylark/cloudflare-bulk-domain-tool"
+#define MyAppURL "https://github.com/silent404s/cloudflare-domain-manager"
 #define MyAppExeName "Cloudflare Bulk Domain Tool.exe"
 
 [Setup]

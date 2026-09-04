@@ -28,8 +28,8 @@ A modern, multi-profile Windows desktop application built with Python & CustomTk
 
 ### 2. Clone & Install Dependencies
 ```bash
-git clone https://github.com/YOUR_USERNAME/cloudflare-bulk-domain-tool.git
-cd cloudflare-bulk-domain-tool
+git clone https://github.com/silent404s/cloudflare-domain-manager.git
+cd cloudflare-domain-manager
 pip install -r requirements.txt
 ```
 
