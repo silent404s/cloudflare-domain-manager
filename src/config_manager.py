@@ -50,6 +50,11 @@ def load_config():
                 
                 save_config(config)
 
+            # Auto-migrate obsolete update_url to the new repository
+            if "skylark/cloudflare-bulk-domain-tool" in config.get("update_url", ""):
+                config["update_url"] = DEFAULT_CONFIG["update_url"]
+                save_config(config)
+
             # Merge with default to ensure all keys exist
             merged_config = DEFAULT_CONFIG.copy()
             merged_config.update(config)

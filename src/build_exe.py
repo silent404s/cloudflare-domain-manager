@@ -13,6 +13,8 @@ def build():
         "--onefile",
         "--name=Cloudflare Bulk Domain Tool",
         "--icon=app_icon.ico",
+        "--distpath=../dist",
+        "--workpath=../build",
         "--collect-all=customtkinter",
         "main.py"
     ]
