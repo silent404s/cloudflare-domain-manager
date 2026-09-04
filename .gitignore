@@ -1,6 +1,8 @@
 # Configuration & Sensitive Data
 config.json
+src/config.json
 data/
+src/data/
 *.log
 app.log
 
