@@ -27,9 +27,27 @@ def fetch_remote_version_info(update_url, timeout=10):
     headers = {
         'User-Agent': 'CloudflareBulkDomainTool-UpdateChecker/1.0'
     }
-    response = requests.get(update_url, headers=headers, timeout=timeout)
-    response.raise_for_status()
-    data = response.json()
+    
+    urls_to_try = [update_url]
+    if "raw.githubusercontent.com" in update_url:
+        if "/main/version.json" in update_url:
+            urls_to_try.append(update_url.replace("/main/version.json", "/main/src/version.json"))
+        elif "/main/src/version.json" in update_url:
+            urls_to_try.append(update_url.replace("/main/src/version.json", "/main/version.json"))
+
+    last_exception = None
+    data = None
+    for url in urls_to_try:
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            data = response.json()
+            break
+        except Exception as e:
+            last_exception = e
+            
+    if data is None:
+        raise last_exception
     
     # Handle GitHub API format ([{tag_name, body, assets...}] or {tag_name...})
     if isinstance(data, list) and len(data) > 0:
