@@ -1,0 +1,25 @@
+{
+    "api_profiles": {
+        "Default": {
+            "api_token": "",
+            "global_api_key": "",
+            "email": "",
+            "auth_method": "token"
+        }
+    },
+    "current_profile": "Default",
+    "batch_size": 10,
+    "delay_between_requests": [
+        2,
+        5
+    ],
+    "delay_between_batches": [
+        30,
+        60
+    ],
+    "max_retries": 3,
+    "timeout": 30,
+    "auto_check_updates": true,
+    "update_url": "https://raw.githubusercontent.com/skylark/cloudflare-bulk-domain-tool/main/version.json"
+}
+

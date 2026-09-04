@@ -1,0 +1,6 @@
+{
+    "version": "1.0.0",
+    "download_url": "https://github.com/skylark/cloudflare-bulk-domain-tool/releases/latest",
+    "html_url": "https://github.com/skylark/cloudflare-bulk-domain-tool/releases",
+    "release_notes": "✨ Versi 1.0.0 Rilis Resmi:\n- Fitur Manajer Single Redirect Rules (Root & Custom Path Redirects)\n- Pencarian Path Rules Cepat\n- Manajemen Multi-Profil API Cloudflare & Dedicated Token\n- Auto-Updater Sistem untuk Desktop Windows\n- Installer .exe resmi Setup Wizard"
+}

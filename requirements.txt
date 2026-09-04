@@ -1,0 +1,4 @@
+requests
+customtkinter
+pandas
+pyinstaller
