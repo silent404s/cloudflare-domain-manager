@@ -19,7 +19,7 @@ DEFAULT_CONFIG = {
     "max_retries": 3,
     "timeout": 30,
     "auto_check_updates": True,
-    "update_url": "https://raw.githubusercontent.com/silent404s/cloudflare-domain-manager/main/version.json"
+    "update_url": "https://raw.githubusercontent.com/silent404s/cloudflare-domain-manager/main/src/version.json"
 }
 
 def load_config():
