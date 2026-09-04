@@ -32,7 +32,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Kompresi & Performa Installer
 Compression=lzma2/max
 SolidCompression=yes
-OutputDir=Output
+OutputDir=..\Output
 OutputBaseFilename=CloudflareBulkDomain_Setup_v{#MyAppVersion}
 WizardStyle=modern
 
@@ -52,7 +52,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Executable Utama
-Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; File Pendukung & Icon
 Source: "app_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
