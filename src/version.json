@@ -1,8 +1,9 @@
 {
     "version": "1.2.0",
-    "download_url": "https://github.com/silent404s/cloudflare-domain-manager/releases/latest",
+    "download_url": "https://github.com/silent404s/cloudflare-domain-manager/raw/main/Output/CloudflareBulkDomain_Setup_v1.0.0.exe",
     "html_url": "https://github.com/silent404s/cloudflare-domain-manager/releases",
     "release_notes": "✨ Versi 1.2.0 Rilis Pembaruan (Tes Auto-Update):\n- Fitur Cek IP Publik (DNS) & Deteksi Profil Akun Cloudflare\n- Fitur Copy Fleksibel per-kolom (Domain, IP, Profil, Status, NS 1..4+)\n- Pop-up Dialog Detail Error Lengkap\n- Penguji Sistem Auto-Update Otomatis"
 }
+
 
 
