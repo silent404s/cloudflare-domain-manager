@@ -7,7 +7,8 @@ src/data/
 app.log
 
 # Build Outputs & Zips
-Output/
+!Output/
+!Output/*.exe
 *.zip
 Cloudflare_Bulk_Domain_Tool_Fresh/
 
