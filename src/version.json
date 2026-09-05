@@ -1,7 +1,8 @@
 {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "download_url": "https://github.com/silent404s/cloudflare-domain-manager/releases/latest",
     "html_url": "https://github.com/silent404s/cloudflare-domain-manager/releases",
-    "release_notes": "✨ Versi 1.1.0 Rilis Pembaruan:\n- Fitur Cek IP Publik (DNS) & Deteksi Profil Akun Cloudflare\n- Opsi Copy Fleksibel untuk setiap kolom hasil (Domain, IP, Profil, Status)\n- Split Nameservers otomatis (Copy NS 1, NS 2, NS 3, NS 4, dll.)\n- Pop-up Dialog Detail Error Lengkap (klik 2x atau menu kontekstual)\n- Perbaikan kompilasi & installer otomatis"
+    "release_notes": "✨ Versi 1.2.0 Rilis Pembaruan (Tes Auto-Update):\n- Fitur Cek IP Publik (DNS) & Deteksi Profil Akun Cloudflare\n- Fitur Copy Fleksibel per-kolom (Domain, IP, Profil, Status, NS 1..4+)\n- Pop-up Dialog Detail Error Lengkap\n- Penguji Sistem Auto-Update Otomatis"
 }
+
 
