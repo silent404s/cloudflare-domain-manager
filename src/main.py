@@ -48,6 +48,63 @@ def center_window_over_parent(window, parent, width=None, height=None):
     except Exception as e:
         app_logger.error(f"Error centering window: {e}")
 
+def parse_nameservers_list(ns_string):
+    if not ns_string:
+        return []
+    cleaned = str(ns_string).replace(';', ',').replace('\n', ',')
+    parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+    res = []
+    for p in parts:
+        if p not in res:
+            res.append(p)
+    return res
+
+class ShowErrorDialog(ctk.CTkToplevel):
+    def __init__(self, parent, domain, error_msg):
+        super().__init__(parent)
+        self.parent = parent
+        self.domain = domain
+        self.error_msg = error_msg
+
+        self.title(f"⚠️ Detail Error - {domain}")
+        self.geometry("540x380")
+        self.resizable(True, True)
+        self.configure(fg_color="#202020")
+
+        self.custom_font = ctk.CTkFont(family="Segoe UI", size=11)
+        self.bold_font = ctk.CTkFont(family="Segoe UI", size=12, weight="bold")
+        self.log_font = ctk.CTkFont(family="Consolas", size=10)
+
+        self.build_ui()
+        center_window_over_parent(self, parent, 540, 380)
+        self.grab_set()
+
+    def build_ui(self):
+        header = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        header.pack(fill="x", padx=15, pady=(15, 10))
+
+        ctk.CTkLabel(header, text=f"⚠️ Detail Error: {self.domain}", font=self.bold_font, text_color="#F87171").pack(anchor="w", padx=15, pady=10)
+
+        content_frame = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        content_frame.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+
+        textbox = ctk.CTkTextbox(content_frame, font=self.log_font, fg_color="#1E1E1E", text_color="#FCA5A5", border_color="#444444", border_width=1, corner_radius=6)
+        textbox.pack(fill="both", expand=True, padx=10, pady=10)
+        textbox.insert("1.0", self.error_msg)
+        textbox.configure(state="disabled")
+
+        btn_bar = ctk.CTkFrame(self, fg_color="transparent")
+        btn_bar.pack(fill="x", padx=15, pady=(0, 15))
+
+        ctk.CTkButton(btn_bar, text="📋 Copy Text Error", font=self.bold_font, command=self.copy_error, fg_color="#0284C7", hover_color="#0369A1", width=140, height=32, corner_radius=8).pack(side="left")
+        ctk.CTkButton(btn_bar, text="Tutup", font=self.custom_font, command=self.destroy, fg_color="#2D2D2D", hover_color="#353535", width=90, height=32, corner_radius=8).pack(side="right")
+
+    def copy_error(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.error_msg)
+        self.update()
+        messagebox.showinfo("Berhasil Copied", "Pesan error berhasil disalin ke clipboard!", parent=self)
+
 class AddProfileDialog(ctk.CTkToplevel):
     def __init__(self, parent, config, on_success_callback):
         super().__init__(parent)
@@ -838,6 +895,7 @@ class CheckDomainIPDialog(ctk.CTkToplevel):
         scrollbar.pack(side="right", fill="y")
 
         self.tree.bind("<Button-3>", self.on_right_click)
+        self.tree.bind("<Double-1>", self.on_double_click)
 
         # Bottom Action Bar
         bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -913,14 +971,38 @@ class CheckDomainIPDialog(ctk.CTkToplevel):
             if not values:
                 return
             
-            domain, public_ip, profile, cf_dns_ip, ns, status = values
+            domain, public_ip, profile, cf_dns_ip, ns_string, status = values
             menu = tk.Menu(self, tearoff=0)
-            menu.add_command(label=f"Copy IP Publik: {public_ip}", command=lambda: self.copy_to_clipboard(public_ip))
-            menu.add_command(label=f"Copy Akun CF: {profile}", command=lambda: self.copy_to_clipboard(profile))
-            menu.add_command(label=f"Copy Nameservers: {ns}", command=lambda: self.copy_to_clipboard(ns))
+
+            if domain:
+                menu.add_command(label=f"📋 Copy Domain: {domain}", command=lambda: self.copy_to_clipboard(domain))
+            if public_ip:
+                menu.add_command(label=f"📋 Copy IP Publik (DNS): {public_ip}", command=lambda: self.copy_to_clipboard(public_ip))
+            if profile:
+                menu.add_command(label=f"📋 Copy Akun CF (Profil): {profile}", command=lambda: self.copy_to_clipboard(profile))
+            if cf_dns_ip:
+                menu.add_command(label=f"📋 Copy Target IP di CF: {cf_dns_ip}", command=lambda: self.copy_to_clipboard(cf_dns_ip))
+            if status:
+                menu.add_command(label=f"📋 Copy Status CF: {status}", command=lambda: self.copy_to_clipboard(status))
+
+            ns_list = parse_nameservers_list(ns_string)
+            if ns_list:
+                menu.add_separator()
+                for idx, ns in enumerate(ns_list, start=1):
+                    menu.add_command(label=f"📋 Copy NS {idx}: {ns}", command=lambda n=ns: self.copy_to_clipboard(n))
+                if len(ns_list) > 1:
+                    menu.add_command(label=f"📋 Copy Semua NS ({len(ns_list)} NS)", command=lambda: self.copy_to_clipboard(", ".join(ns_list)))
+
             menu.add_separator()
-            menu.add_command(label="Copy Seluruh Baris", command=lambda: self.copy_to_clipboard(f"Domain: {domain} | IP Publik: {public_ip} | Akun CF: {profile} | Target IP CF: {cf_dns_ip} | NS: {ns}"))
+            menu.add_command(label="📋 Copy Seluruh Baris", command=lambda: self.copy_to_clipboard(f"Domain: {domain} | IP Publik: {public_ip} | Akun CF: {profile} | Target IP CF: {cf_dns_ip} | NS: {ns_string}"))
             menu.tk_popup(event.x_root, event.y_root)
+
+    def on_double_click(self, event):
+        item_id = self.tree.identify_row(event.y)
+        if item_id:
+            values = self.tree.item(item_id, "values")
+            if values and values[0]:
+                self.copy_to_clipboard(values[0])
 
     def copy_to_clipboard(self, text):
         self.clipboard_clear()
@@ -1163,8 +1245,9 @@ class App(ctk.CTk):
         self.log_text.grid(row=3, column=0, sticky="nsew", pady=(5, 10), padx=10)
         self.log_text.configure(state="disabled")
         
-        # Bind right click on Treeview
+        # Bind right click & double click on Treeview
         self.tree.bind("<Button-3>", self.on_right_click)
+        self.tree.bind("<Double-1>", self.on_double_click)
 
     def on_right_click(self, event):
         item_id = self.tree.identify_row(event.y)
@@ -1172,21 +1255,46 @@ class App(ctk.CTk):
             self.tree.selection_set(item_id)
             item = self.tree.item(item_id)
             values = item['values']
-            domain = values[0] if values else ""
-            
+            if not values:
+                return
+
+            domain = values[0] if len(values) > 0 else ""
+            ip = values[1] if len(values) > 1 else ""
+            profile = values[2] if len(values) > 2 else ""
+            status = values[3] if len(values) > 3 else ""
+            ns_string = values[4] if len(values) > 4 else ""
+            error_msg = values[5] if len(values) > 5 else ""
+
             menu = tk.Menu(self, tearoff=0)
-            if len(values) > 4:
-                ns_string = values[4]
-                if ns_string:
-                    ns_list = [ns.strip() for ns in ns_string.split(',') if ns.strip()]
-                    if len(ns_list) >= 1:
-                        menu.add_command(label=f"Copy NS 1: {ns_list[0]}", command=lambda: self.copy_to_clipboard(ns_list[0]))
-                    if len(ns_list) >= 2:
-                        menu.add_command(label=f"Copy NS 2: {ns_list[1]}", command=lambda: self.copy_to_clipboard(ns_list[1]))
-            
+
+            # Copy Individual Fields
             if domain:
-                if len(values) > 4 and values[4]:
-                    menu.add_separator()
+                menu.add_command(label=f"📋 Copy Domain: {domain}", command=lambda: self.copy_to_clipboard(domain))
+            if ip:
+                menu.add_command(label=f"📋 Copy Target IP: {ip}", command=lambda: self.copy_to_clipboard(ip))
+            if profile:
+                menu.add_command(label=f"📋 Copy Profil CF: {profile}", command=lambda: self.copy_to_clipboard(profile))
+            if status:
+                menu.add_command(label=f"📋 Copy Status: {status}", command=lambda: self.copy_to_clipboard(status))
+
+            # Copy Nameservers (NS 1, NS 2, NS 3, NS 4, etc.)
+            ns_list = parse_nameservers_list(ns_string)
+            if ns_list:
+                menu.add_separator()
+                for idx, ns in enumerate(ns_list, start=1):
+                    menu.add_command(label=f"📋 Copy NS {idx}: {ns}", command=lambda n=ns: self.copy_to_clipboard(n))
+                if len(ns_list) > 1:
+                    menu.add_command(label=f"📋 Copy Semua NS ({len(ns_list)} NS)", command=lambda: self.copy_to_clipboard(", ".join(ns_list)))
+
+            # Error Message Detail
+            if error_msg:
+                menu.add_separator()
+                menu.add_command(label="⚠️ Lihat Detail Error Lengkap...", command=lambda: self.show_error_dialog(domain, error_msg))
+                menu.add_command(label="📋 Copy Message Error", command=lambda: self.copy_to_clipboard(error_msg))
+
+            # Domain Operations / Actions
+            if domain:
+                menu.add_separator()
                 menu.add_command(label=f"Edit Target IP untuk {domain}", command=lambda: self.edit_single_domain_ip_dialog(domain))
                 menu.add_command(label=f"Edit Profil CF untuk {domain}", command=lambda: self.edit_single_domain_profile_dialog(domain))
                 menu.add_command(label=f"Proses Ubah IP Cloudflare untuk {domain}", command=lambda: self.update_single_domain_dialog(domain, item_id))
@@ -1195,8 +1303,22 @@ class App(ctk.CTk):
                 menu.add_command(label=f"🔍 Cek IP & Deteksi Akun CF untuk {domain}", command=lambda: self.open_check_ip_dialog(domain))
                 menu.add_command(label=f"Reset Status {domain} ke Pending", command=lambda: self.reset_single_domain_status(item_id))
                 menu.add_command(label=f"Hapus {domain} dari Antrian", command=lambda: self.delete_single_domain(domain))
-                
+
             menu.tk_popup(event.x_root, event.y_root)
+
+    def on_double_click(self, event):
+        item_id = self.tree.identify_row(event.y)
+        if item_id:
+            values = self.tree.item(item_id, "values")
+            if not values:
+                return
+            domain = values[0] if len(values) > 0 else ""
+            error_msg = values[5] if len(values) > 5 else ""
+            if error_msg:
+                self.show_error_dialog(domain, error_msg)
+
+    def show_error_dialog(self, domain, error_msg):
+        ShowErrorDialog(self, domain, error_msg)
 
     def prompt_input(self, title, text):
         dialog = ctk.CTkInputDialog(text=text, title=title)
