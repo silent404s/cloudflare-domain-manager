@@ -4,7 +4,7 @@ import requests
 import customtkinter as ctk
 from tkinter import messagebox
 
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 
 def parse_version(version_str):
     """

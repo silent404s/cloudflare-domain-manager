@@ -1754,32 +1754,40 @@ class App(ctk.CTk):
             threading.Thread(target=self._run_single_ip_update, args=(domain, new_ip), daemon=True).start()
 
     def _run_single_ip_update(self, domain, new_ip):
-        app_logger.info(f"Updating IP for {domain} to {new_ip}...")
+        app_logger.info(f"Mencari profil & memperbarui IP untuk {domain} ke {new_ip}...")
         
-        target_prof = self.profile_var.get()
+        prof_name, api, zone_id, zone_name, ns_list, err_msg = find_zone_across_profiles(self.config, domain)
+        
         target_item = None
         for item in self.domains_data:
             if item.get('domain') == domain:
                 target_item = item
-                if item.get('profile'):
-                    target_prof = item['profile']
                 break
-                
-        api = CloudflareAPI(self.config, profile_name=target_prof)
-        success, ns, msg = api.update_domain_ip(domain, new_ip)
+
+        if not zone_id:
+            if target_item:
+                target_item['status'] = 'Failed'
+                target_item['error'] = f"Update IP: {err_msg or 'Domain tidak ditemukan di profil CF manapun.'}"
+            export_utils.save_state(self.domains_data)
+            self.after(0, self.update_domains_listbox)
+            app_logger.error(f"[{domain}] Failed to update IP: {err_msg or 'Domain tidak ditemukan di profil CF manapun.'}")
+            return
+
+        success, msg = api.upsert_dns_record(zone_id, "A", domain, new_ip, proxied=True)
         
         if target_item:
             target_item['ip'] = new_ip
+            target_item['profile'] = prof_name
             if success:
                 target_item['status'] = 'Success'
-                if ns:
-                    target_item['nameservers'] = ", ".join(ns)
+                if ns_list:
+                    target_item['nameservers'] = ", ".join(ns_list)
                 target_item['error'] = ''
-                app_logger.info(f"[{domain}] IP successfully updated to {new_ip} via profile '{target_prof}'")
+                app_logger.info(f"[{domain}] IP successfully updated to {new_ip} via profile '{prof_name}'")
             else:
                 target_item['status'] = 'Failed'
                 target_item['error'] = f"Update IP: {msg}"
-                app_logger.error(f"[{domain}] Failed to update IP via profile '{target_prof}': {msg}")
+                app_logger.error(f"[{domain}] Failed to update IP via profile '{prof_name}': {msg}")
                 
         export_utils.save_state(self.domains_data)
         self.after(0, self.update_domains_listbox)

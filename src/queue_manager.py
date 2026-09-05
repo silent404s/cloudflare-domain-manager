@@ -1,7 +1,7 @@
 import threading
 import time
 import random
-from cloudflare_api import CloudflareAPI
+from cloudflare_api import CloudflareAPI, find_zone_across_profiles
 from logger import app_logger
 import export_utils
 
@@ -156,7 +156,7 @@ class QueueManager:
         self.is_running = False
         self.update_gui_callback()
 
-    def _update_single_domain_ip(self, domain, item, target_ip, api_client):
+    def _update_single_domain_ip(self, domain, item, target_ip, default_api_client):
         retries = 0
         while retries <= self.max_retries:
             self._wait_if_paused()
@@ -167,15 +167,52 @@ class QueueManager:
                 app_logger.warning(f"Retrying IP update for {domain} (Attempt {retries}/{self.max_retries})")
                 self._sleep(5)
 
-            success, ns, msg = api_client.update_domain_ip(domain, target_ip)
+            # 1. Try assigned profile if any
+            prof_name = item.get('profile')
+            api_client = None
+            zone_id = None
+            ns_list = []
+            
+            if prof_name and prof_name in self.config.get('api_profiles', {}):
+                api_client = CloudflareAPI(self.config, profile_name=prof_name)
+                zone_id, zone_name, ns_list = api_client.find_zone(domain)
+
+            # 2. If not found, auto-detect across ALL saved CF profiles
+            if not zone_id:
+                found_prof, found_api, found_zone_id, zone_name, found_ns, err_msg = find_zone_across_profiles(self.config, domain)
+                if found_zone_id:
+                    prof_name = found_prof
+                    api_client = found_api
+                    zone_id = found_zone_id
+                    ns_list = found_ns
+                    item['profile'] = prof_name
+
+            # 3. Fallback to default api_client if zone still not resolved directly
+            if not zone_id:
+                api_client = default_api_client
+                success, ns, msg = api_client.update_domain_ip(domain, target_ip)
+                if success:
+                    if ns:
+                        item['nameservers'] = ", ".join(ns)
+                    app_logger.info(f"[{domain}] IP successfully updated to {target_ip}")
+                    return True
+                else:
+                    item['error'] = f"Update IP: {msg}"
+                    app_logger.error(f"[{domain}] Failed to update IP: {msg}")
+                    retries += 1
+                    continue
+
+            # 4. Upsert A record using resolved zone
+            success, msg = api_client.upsert_dns_record(zone_id, "A", domain, target_ip, proxied=True)
             if success:
-                if ns:
-                    item['nameservers'] = ", ".join(ns)
-                app_logger.info(f"[{domain}] IP successfully updated to {target_ip}")
+                if ns_list:
+                    item['nameservers'] = ", ".join(ns_list)
+                item['profile'] = prof_name
+                app_logger.info(f"[{domain}] IP successfully updated to {target_ip} (CF Profile: {prof_name})")
                 return True
             else:
                 item['error'] = f"Update IP: {msg}"
-                app_logger.error(f"[{domain}] Failed to update IP: {msg}")
+                app_logger.error(f"[{domain}] Failed to update IP via '{prof_name}': {msg}")
                 retries += 1
 
         return False

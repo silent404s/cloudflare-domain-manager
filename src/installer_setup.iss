@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "Cloudflare Bulk Domain Tool"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "Skylark"
 #define MyAppURL "https://github.com/silent404s/cloudflare-domain-manager"
 #define MyAppExeName "Cloudflare Bulk Domain Tool.exe"
@@ -42,7 +42,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 
 ; Otomatis Menutup Aplikasi Lama Jika Sedang Berjalan Saat Update
 CloseApplications=yes
-CloseApplicationsFilter=*.exe
+CloseApplicationsFilter=*Cloudflare Bulk Domain Tool*.exe
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -67,3 +67,14 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  // Automatically terminate any running instance of the application before updating/replacing files
+  Exec('taskkill.exe', '/F /T /IM "Cloudflare Bulk Domain Tool.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
