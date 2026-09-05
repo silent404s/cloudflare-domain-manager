@@ -1,6 +1,7 @@
 {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "download_url": "https://github.com/silent404s/cloudflare-domain-manager/releases/latest",
     "html_url": "https://github.com/silent404s/cloudflare-domain-manager/releases",
-    "release_notes": "✨ Versi 1.0.0 Rilis Resmi:\n- Fitur Manajer Single Redirect Rules (Root & Custom Path Redirects)\n- Pencarian Path Rules Cepat\n- Manajemen Multi-Profil API Cloudflare & Dedicated Token\n- Auto-Updater Sistem untuk Desktop Windows\n- Installer .exe resmi Setup Wizard"
+    "release_notes": "✨ Versi 1.1.0 Rilis Pembaruan:\n- Fitur Cek IP Publik (DNS) & Deteksi Profil Akun Cloudflare\n- Opsi Copy Fleksibel untuk setiap kolom hasil (Domain, IP, Profil, Status)\n- Split Nameservers otomatis (Copy NS 1, NS 2, NS 3, NS 4, dll.)\n- Pop-up Dialog Detail Error Lengkap (klik 2x atau menu kontekstual)\n- Perbaikan kompilasi & installer otomatis"
 }
+
