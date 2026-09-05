@@ -522,3 +522,75 @@ def find_zone_across_profiles(config, domain_string):
             return prof_name, api, zone_id, zone_name, name_servers, None
 
     return None, None, None, None, None, "Domain tidak ditemukan pada profil Cloudflare manapun."
+
+def check_domain_ip_and_profile(config, domain_string):
+    """
+    Resolves public DNS IP of domain_string and searches across all saved Cloudflare API profiles.
+    Returns a dict with domain IP and Cloudflare profile ownership info.
+    """
+    import socket
+    domain_clean = domain_string.strip().lower()
+    if domain_clean.startswith("http://"):
+        domain_clean = domain_clean[7:]
+    if domain_clean.startswith("https://"):
+        domain_clean = domain_clean[8:]
+    domain_clean = domain_clean.split('/')[0].split(':')[0].strip()
+
+    if not domain_clean:
+        return {
+            "domain": domain_string,
+            "public_ip": "-",
+            "profile": "-",
+            "cf_dns_ip": "-",
+            "zone_id": "-",
+            "zone_name": "-",
+            "nameservers": "-",
+            "status": "Format Error",
+            "error": "Domain tidak valid"
+        }
+
+    # 1. Resolve Public DNS IP
+    try:
+        public_ip = socket.gethostbyname(domain_clean)
+    except Exception:
+        public_ip = "Gagal Resolusi IP"
+
+    # 2. Search across all saved CF profiles
+    prof_name, api, zone_id, zone_name, name_servers, err_msg = find_zone_across_profiles(config, domain_clean)
+
+    if zone_id and api:
+        cf_dns_ip = "-"
+        success_dns, dns_recs, _ = api.get_dns_records(zone_id, name=domain_clean, record_type="A")
+        if success_dns and dns_recs:
+            cf_dns_ip = ", ".join([r.get('content', '') for r in dns_recs if r.get('content')])
+        else:
+            if zone_name and zone_name != domain_clean:
+                success_dns_root, dns_recs_root, _ = api.get_dns_records(zone_id, name=zone_name, record_type="A")
+                if success_dns_root and dns_recs_root:
+                    cf_dns_ip = ", ".join([r.get('content', '') for r in dns_recs_root if r.get('content')])
+
+        ns_str = ", ".join(name_servers) if name_servers else "-"
+        
+        return {
+            "domain": domain_clean,
+            "public_ip": public_ip,
+            "profile": prof_name,
+            "cf_dns_ip": cf_dns_ip if cf_dns_ip else "-",
+            "zone_id": zone_id,
+            "zone_name": zone_name if zone_name else domain_clean,
+            "nameservers": ns_str,
+            "status": "Ditemukan di CF",
+            "error": ""
+        }
+    else:
+        return {
+            "domain": domain_clean,
+            "public_ip": public_ip,
+            "profile": "Tidak Ada di Profil CF",
+            "cf_dns_ip": "-",
+            "zone_id": "-",
+            "zone_name": "-",
+            "nameservers": "-",
+            "status": "Tidak Ditemukan",
+            "error": err_msg if err_msg else ""
+        }

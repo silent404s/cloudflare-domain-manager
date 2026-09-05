@@ -11,7 +11,7 @@ import export_utils
 import update_checker
 from logger import app_logger
 from queue_manager import QueueManager
-from cloudflare_api import CloudflareAPI, find_zone_across_profiles
+from cloudflare_api import CloudflareAPI, find_zone_across_profiles, check_domain_ip_and_profile
 
 def is_valid_ipv4(ip):
     if not ip:
@@ -727,6 +727,239 @@ class AddSubdomainDialog(ctk.CTkToplevel):
         )
         self.destroy()
 
+class CheckDomainIPDialog(ctk.CTkToplevel):
+    def __init__(self, parent, config, prefill_domains=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.config = config
+        self.prefill_domains = prefill_domains or []
+        self.results_data = []
+        self.is_checking = False
+
+        self.title("🔍 Cek IP Domain & Akun Cloudflare")
+        self.geometry("860x640")
+        self.configure(fg_color="#202020")
+
+        self.custom_font = ctk.CTkFont(family="Segoe UI", size=11)
+        self.bold_font = ctk.CTkFont(family="Segoe UI", size=11, weight="bold")
+
+        self.build_ui()
+        center_window_over_parent(self, parent, 860, 640)
+        self.grab_set()
+
+        if self.prefill_domains:
+            self.domains_input.insert("1.0", "\n".join(self.prefill_domains))
+            self.start_check_thread()
+
+    def build_ui(self):
+        # Header Frame
+        header_frame = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        header_frame.pack(fill="x", padx=15, pady=(15, 10))
+
+        ctk.CTkLabel(
+            header_frame,
+            text="🔍 Cek IP Publik Domain & Deteksi Profil Akun Cloudflare",
+            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
+            text_color="#38BDF8"
+        ).pack(anchor="w", padx=15, pady=(10, 2))
+
+        ctk.CTkLabel(
+            header_frame,
+            text="Masukkan daftar domain (satu per baris) untuk mengecek IP Publik (DNS) dan mengetahui di Profil Akun CF mana domain tersebut terdaftar.",
+            font=self.custom_font,
+            text_color="#A0A0A0"
+        ).pack(anchor="w", padx=15, pady=(0, 10))
+
+        # Main Input & Action Frame
+        input_frame = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        input_frame.pack(fill="x", padx=15, pady=(0, 10))
+
+        ctk.CTkLabel(input_frame, text="Daftar Domain (Contoh: domain.com, sub.domain.com):", font=self.bold_font).pack(anchor="w", padx=15, pady=(10, 2))
+
+        self.domains_input = ctk.CTkTextbox(input_frame, height=85, font=self.custom_font, fg_color="#1E1E1E", border_color="#444444", border_width=1, corner_radius=8)
+        self.domains_input.pack(fill="x", padx=15, pady=(0, 10))
+
+        # Action Buttons for Input
+        btn_bar = ctk.CTkFrame(input_frame, fg_color="transparent")
+        btn_bar.pack(fill="x", padx=15, pady=(0, 10))
+
+        self.btn_run = ctk.CTkButton(btn_bar, text="🚀 Mulai Cek IP & Profil CF", font=self.bold_font, command=self.start_check_thread, fg_color="#7C3AED", hover_color="#6D28D9", height=32, corner_radius=8)
+        self.btn_run.pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(btn_bar, text="Hapus Text", font=self.custom_font, command=self.clear_input, fg_color="#2D2D2D", hover_color="#353535", width=90, height=32, corner_radius=8).pack(side="left")
+
+        # Progress Frame
+        prog_frame = ctk.CTkFrame(self, fg_color="transparent")
+        prog_frame.pack(fill="x", padx=15, pady=(0, 5))
+
+        self.status_lbl = ctk.CTkLabel(prog_frame, text="Siap mengecek domain.", font=self.custom_font, text_color="#38BDF8")
+        self.status_lbl.pack(anchor="w", pady=(0, 2))
+
+        self.progress_bar = ctk.CTkProgressBar(prog_frame, height=8)
+        self.progress_bar.pack(fill="x")
+        self.progress_bar.set(0)
+
+        # Results Table Frame
+        table_frame = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        table_frame.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+
+        columns = ("domain", "public_ip", "profile", "cf_dns_ip", "nameservers", "status")
+        self.tree = tk.ttk.Treeview(table_frame, columns=columns, show="headings", style="CheckIP.Treeview")
+        
+        self.tree.heading("domain", text="Domain")
+        self.tree.heading("public_ip", text="IP Publik (DNS)")
+        self.tree.heading("profile", text="Akun CF (Profil)")
+        self.tree.heading("cf_dns_ip", text="Target IP di CF")
+        self.tree.heading("nameservers", text="Nameservers")
+        self.tree.heading("status", text="Status CF")
+
+        self.tree.column("domain", width=170, minwidth=110, stretch=True)
+        self.tree.column("public_ip", width=120, minwidth=90, stretch=True)
+        self.tree.column("profile", width=130, minwidth=90, stretch=True)
+        self.tree.column("cf_dns_ip", width=120, minwidth=90, stretch=True)
+        self.tree.column("nameservers", width=180, minwidth=100, stretch=True)
+        self.tree.column("status", width=95, minwidth=70, stretch=True)
+
+        style = tk.ttk.Style(self)
+        style.theme_use("default")
+        style.configure("CheckIP.Treeview", background="#202020", fieldbackground="#202020", foreground="white", borderwidth=0, font=("Segoe UI", 10), rowheight=25)
+        style.map('CheckIP.Treeview', background=[('selected', '#005FB8')])
+        style.configure("CheckIP.Treeview.Heading", background="#282828", foreground="white", relief="flat", font=("Segoe UI", 10, "bold"))
+        
+        self.tree.tag_configure("evenrow", background="#202020")
+        self.tree.tag_configure("oddrow", background="#282828")
+        self.tree.tag_configure("found", foreground="#34D399")
+        self.tree.tag_configure("not_found", foreground="#F87171")
+
+        self.tree.pack(side="left", fill="both", expand=True)
+
+        scrollbar = tk.ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+
+        self.tree.bind("<Button-3>", self.on_right_click)
+
+        # Bottom Action Bar
+        bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
+        bottom_frame.pack(fill="x", padx=15, pady=(0, 15))
+
+        ctk.CTkButton(bottom_frame, text="📋 Copy Semua Hasil", font=self.custom_font, command=self.copy_all_results, fg_color="#2D2D2D", hover_color="#353535", width=130, height=30, corner_radius=8).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(bottom_frame, text="💾 Export CSV", font=self.custom_font, command=self.export_csv, fg_color="#2D2D2D", hover_color="#353535", width=110, height=30, corner_radius=8).pack(side="left", padx=5)
+
+        ctk.CTkButton(bottom_frame, text="Tutup", font=self.custom_font, command=self.destroy, fg_color="#4B5563", hover_color="#374151", width=80, height=30, corner_radius=8).pack(side="right")
+
+    def clear_input(self):
+        self.domains_input.delete("1.0", "end")
+
+    def start_check_thread(self):
+        if self.is_checking:
+            return
+        
+        text = self.domains_input.get("1.0", "end").strip()
+        if not text:
+            messagebox.showwarning("Peringatan", "Masukkan minimal satu domain untuk dicek.", parent=self)
+            return
+
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+        if not lines:
+            return
+
+        self.is_checking = True
+        self.btn_run.configure(state="disabled", text="⏳ Sedang Memeriksa...")
+        
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self.results_data.clear()
+
+        thread = threading.Thread(target=self.worker, args=(lines,), daemon=True)
+        thread.start()
+
+    def worker(self, domains):
+        total = len(domains)
+        for i, dom in enumerate(domains):
+            self.after(0, lambda idx=i+1, d=dom: self.status_lbl.configure(text=f"Memeriksa ({idx}/{total}): {d} ..."))
+            self.after(0, lambda idx=i+1: self.progress_bar.set(idx / total))
+
+            res = check_domain_ip_and_profile(self.config, dom)
+            self.results_data.append(res)
+
+            self.after(0, lambda r=res: self.add_result_row(r))
+
+        self.after(0, self.finish_check)
+
+    def add_result_row(self, res):
+        tag = "found" if res.get("profile") != "Tidak Ada di Profil CF" else "not_found"
+        
+        self.tree.insert("", "end", values=(
+            res.get("domain", ""),
+            res.get("public_ip", ""),
+            res.get("profile", ""),
+            res.get("cf_dns_ip", ""),
+            res.get("nameservers", ""),
+            res.get("status", "")
+        ), tags=(tag,))
+
+    def finish_check(self):
+        self.is_checking = False
+        self.btn_run.configure(state="normal", text="🚀 Mulai Cek IP & Profil CF")
+        found_count = sum(1 for r in self.results_data if r.get("profile") != "Tidak Ada di Profil CF")
+        self.status_lbl.configure(text=f"✅ Selesai mengecek {len(self.results_data)} domain ({found_count} ditemukan di profil CF Anda).")
+
+    def on_right_click(self, event):
+        item_id = self.tree.identify_row(event.y)
+        if item_id:
+            self.tree.selection_set(item_id)
+            values = self.tree.item(item_id, "values")
+            if not values:
+                return
+            
+            domain, public_ip, profile, cf_dns_ip, ns, status = values
+            menu = tk.Menu(self, tearoff=0)
+            menu.add_command(label=f"Copy IP Publik: {public_ip}", command=lambda: self.copy_to_clipboard(public_ip))
+            menu.add_command(label=f"Copy Akun CF: {profile}", command=lambda: self.copy_to_clipboard(profile))
+            menu.add_command(label=f"Copy Nameservers: {ns}", command=lambda: self.copy_to_clipboard(ns))
+            menu.add_separator()
+            menu.add_command(label="Copy Seluruh Baris", command=lambda: self.copy_to_clipboard(f"Domain: {domain} | IP Publik: {public_ip} | Akun CF: {profile} | Target IP CF: {cf_dns_ip} | NS: {ns}"))
+            menu.tk_popup(event.x_root, event.y_root)
+
+    def copy_to_clipboard(self, text):
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+
+    def copy_all_results(self):
+        if not self.results_data:
+            return
+        lines = []
+        for r in self.results_data:
+            lines.append(f"Domain: {r['domain']} | IP Publik: {r['public_ip']} | Akun CF: {r['profile']} | Target IP CF: {r['cf_dns_ip']} | NS: {r['nameservers']}")
+        text = "\n".join(lines)
+        self.copy_to_clipboard(text)
+        messagebox.showinfo("Hasil Dicomot", f"Berhasil menyalin {len(self.results_data)} hasil ke clipboard.", parent=self)
+
+    def export_csv(self):
+        if not self.results_data:
+            messagebox.showwarning("Peringatan", "Tidak ada hasil untuk diexport.", parent=self)
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            title="Export Hasil Cek IP & Profil CF",
+            parent=self
+        )
+        if file_path:
+            try:
+                import csv
+                with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Domain", "IP Publik (DNS)", "Akun CF (Profil)", "Target IP di CF", "Nameservers", "Status"])
+                    for r in self.results_data:
+                        writer.writerow([r['domain'], r['public_ip'], r['profile'], r['cf_dns_ip'], r['nameservers'], r['status']])
+                messagebox.showinfo("Sukses", f"Hasil berhasil diexport ke:\n{file_path}", parent=self)
+            except Exception as e:
+                messagebox.showerror("Error", f"Gagal mengexport CSV:\n{e}", parent=self)
+
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -878,6 +1111,7 @@ class App(ctk.CTk):
 
         ctk.CTkButton(row2_frame, text="Show NS", font=self.custom_font, command=self.show_ns_summary, width=80, height=28, fg_color="#2D2D2D", hover_color="#353535", border_width=1, border_color="#3D3D3D", text_color="#FFFFFF", corner_radius=8).pack(side="right", padx=(5, 0))
         ctk.CTkButton(row2_frame, text="Export CSV", font=self.custom_font, command=self.export_csv, width=85, height=28, fg_color="#2D2D2D", hover_color="#353535", border_width=1, border_color="#3D3D3D", text_color="#FFFFFF", corner_radius=8).pack(side="right", padx=5)
+        ctk.CTkButton(row2_frame, text="🔍 Cek IP & Profil CF", font=self.custom_font, command=self.open_check_ip_dialog, width=140, height=28, fg_color="#7C3AED", hover_color="#6D28D9", text_color="#FFFFFF", corner_radius=8).pack(side="right", padx=5)
         ctk.CTkButton(row2_frame, text="⚡ Cek Update", font=self.custom_font, command=self.check_updates_manual, width=95, height=28, fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF", corner_radius=8).pack(side="right", padx=5)
 
         # Domains List (using standard Treeview for columns inside a tkinter Frame)
@@ -958,6 +1192,7 @@ class App(ctk.CTk):
                 menu.add_command(label=f"Proses Ubah IP Cloudflare untuk {domain}", command=lambda: self.update_single_domain_dialog(domain, item_id))
                 menu.add_command(label=f"Tambah Subdomain untuk {domain}", command=lambda: self.open_add_subdomain_dialog(domain))
                 menu.add_command(label=f"⚡ Buat Redirect Rules untuk {domain}", command=lambda: self.open_redirect_rules_dialog_for_domain(domain))
+                menu.add_command(label=f"🔍 Cek IP & Deteksi Akun CF untuk {domain}", command=lambda: self.open_check_ip_dialog(domain))
                 menu.add_command(label=f"Reset Status {domain} ke Pending", command=lambda: self.reset_single_domain_status(item_id))
                 menu.add_command(label=f"Hapus {domain} dari Antrian", command=lambda: self.delete_single_domain(domain))
                 
@@ -1038,6 +1273,10 @@ class App(ctk.CTk):
             on_success_callback=self.update_domains_listbox,
             prefill_domain=prefill_domain
         )
+
+    def open_check_ip_dialog(self, prefill_domain=""):
+        domains = [prefill_domain] if prefill_domain else []
+        dialog = CheckDomainIPDialog(parent=self, config=self.config, prefill_domains=domains)
     def open_redirect_rules_dialog(self):
         dialog = RedirectRulesDialog(parent=self, config=self.config)
         center_window_over_parent(dialog, self, 680, 640)
