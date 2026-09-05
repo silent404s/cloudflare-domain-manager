@@ -784,6 +784,208 @@ class AddSubdomainDialog(ctk.CTkToplevel):
         )
         self.destroy()
 
+class UpdateIPDialog(ctk.CTkToplevel):
+    def __init__(self, parent, config, domains_data, on_success_callback, prefill_domain=""):
+        super().__init__(parent)
+        self.parent = parent
+        self.config = config
+        self.domains_data = domains_data
+        self.on_success_callback = on_success_callback
+        self.prefill_domain = prefill_domain
+        self.is_processing = False
+
+        self.title("⚡ Ubah IP Domain Cloudflare (Auto-Detect)")
+        self.geometry("560x520")
+        self.resizable(False, False)
+        self.configure(fg_color="#202020")
+
+        self.custom_font = ctk.CTkFont(family="Segoe UI", size=11)
+        self.bold_font = ctk.CTkFont(family="Segoe UI", size=11, weight="bold")
+        self.log_font = ctk.CTkFont(family="Consolas", size=10)
+
+        self.build_ui()
+        center_window_over_parent(self, parent, 560, 520)
+        self.grab_set()
+
+    def build_ui(self):
+        # Header Frame
+        header_frame = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        header_frame.pack(fill="x", padx=15, pady=(15, 10))
+
+        ctk.CTkLabel(
+            header_frame,
+            text="⚡ Ubah IP DNS A-Record (Auto-Detect Profil CF)",
+            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
+            text_color="#D97706"
+        ).pack(anchor="w", padx=15, pady=(10, 2))
+
+        ctk.CTkLabel(
+            header_frame,
+            text="Masukkan daftar domain/subdomain dan Target IP baru. Sistem akan otomatis mencari lokasi profil Cloudflare untuk setiap domain.",
+            font=self.custom_font,
+            text_color="#A0A0A0"
+        ).pack(anchor="w", padx=15, pady=(0, 10))
+
+        # Main Input Frame
+        input_frame = ctk.CTkFrame(self, fg_color="#282828", corner_radius=8)
+        input_frame.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+
+        # Domains Input Textbox
+        ctk.CTkLabel(input_frame, text="Daftar Domain / Subdomain (Satu per baris):", font=self.bold_font).pack(anchor="w", padx=15, pady=(10, 2))
+        self.domains_input = ctk.CTkTextbox(input_frame, height=95, font=self.custom_font, fg_color="#1E1E1E", border_color="#444444", border_width=1, corner_radius=8)
+        self.domains_input.pack(fill="x", padx=15, pady=(0, 8))
+
+        if self.prefill_domain:
+            self.domains_input.insert("1.0", self.prefill_domain)
+        elif self.parent and hasattr(self.parent, 'domains_data') and self.parent.domains_data:
+            pending_doms = [d['domain'] for d in self.parent.domains_data if d.get('domain')]
+            if pending_doms:
+                self.domains_input.insert("1.0", "\n".join(pending_doms))
+
+        # Target IP Entry
+        ctk.CTkLabel(input_frame, text="Target IPv4 Address Baru:", font=self.bold_font).pack(anchor="w", padx=15, pady=(0, 2))
+        self.ip_entry = ctk.CTkEntry(input_frame, placeholder_text="103.xxx.xxx.xxx", font=self.custom_font, fg_color="#1E1E1E", border_color="#444444", corner_radius=8)
+        self.ip_entry.pack(fill="x", padx=15, pady=(0, 8))
+
+        parent_ip = self.parent.ip_entry.get().strip() if hasattr(self.parent, 'ip_entry') else ""
+        if parent_ip and is_valid_ipv4(parent_ip):
+            self.ip_entry.insert(0, parent_ip)
+
+        # Checkboxes
+        chk_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        chk_frame.pack(fill="x", padx=15, pady=(0, 5))
+        self.proxied_var = tk.BooleanVar(value=True)
+        self.update_queue_var = tk.BooleanVar(value=True)
+        ctk.CTkCheckBox(chk_frame, text="Proxy Cloudflare (Orange Cloud)", font=self.custom_font, variable=self.proxied_var).pack(side="left", padx=(0, 15))
+        ctk.CTkCheckBox(chk_frame, text="Update/Simpan ke Antrian Utama", font=self.custom_font, variable=self.update_queue_var).pack(side="left")
+
+        # Status & Progress Frame
+        prog_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        prog_frame.pack(fill="x", padx=15, pady=(5, 5))
+
+        self.status_lbl = ctk.CTkLabel(prog_frame, text="Siap memproses ubah IP.", font=self.custom_font, text_color="#D97706")
+        self.status_lbl.pack(anchor="w", pady=(0, 2))
+
+        self.progress_bar = ctk.CTkProgressBar(prog_frame, height=8)
+        self.progress_bar.pack(fill="x")
+        self.progress_bar.set(0)
+
+        # Bottom Action Buttons
+        btn_bar = ctk.CTkFrame(self, fg_color="transparent")
+        btn_bar.pack(fill="x", padx=15, pady=(0, 15))
+
+        self.btn_submit = ctk.CTkButton(btn_bar, text="⚡ Mulai Ubah IP (Auto-Detect CF)", font=self.bold_font, command=self.start_process, fg_color="#D97706", hover_color="#B45309", height=32, corner_radius=8)
+        self.btn_submit.pack(side="left", padx=(0, 10))
+
+        self.btn_cancel = ctk.CTkButton(btn_bar, text="Batal / Tutup", font=self.custom_font, command=self.destroy, fg_color="#2D2D2D", hover_color="#353535", width=95, height=32, corner_radius=8)
+        self.btn_cancel.pack(side="right")
+
+    def start_process(self):
+        if self.is_processing:
+            return
+
+        text = self.domains_input.get("1.0", "end").strip()
+        ip_str = self.ip_entry.get().strip()
+
+        if not text:
+            messagebox.showerror("Error", "Masukkan minimal satu domain/subdomain.", parent=self)
+            return
+
+        if not ip_str or not is_valid_ipv4(ip_str):
+            messagebox.showerror("Error", "Masukkan Target IPv4 Address yang valid.", parent=self)
+            return
+
+        domains = [l.strip() for l in text.split('\n') if l.strip()]
+        if not domains:
+            return
+
+        self.is_processing = True
+        self.btn_submit.configure(state="disabled", text="⏳ Memproses Ubah IP...")
+        self.btn_cancel.configure(state="disabled")
+
+        threading.Thread(
+            target=self.worker,
+            args=(domains, ip_str, self.proxied_var.get(), self.update_queue_var.get()),
+            daemon=True
+        ).start()
+
+    def worker(self, domains, ip_str, proxied, update_queue):
+        total = len(domains)
+        success_count = 0
+        failed_count = 0
+
+        for i, dom in enumerate(domains):
+            self.after(0, lambda idx=i+1, d=dom: self.status_lbl.configure(text=f"Memproses ({idx}/{total}): {d} -> {ip_str} ..."))
+            self.after(0, lambda idx=i+1: self.progress_bar.set(idx / total))
+
+            prof_name, api, zone_id, zone_name, ns_list, err_msg = find_zone_across_profiles(self.config, dom)
+
+            if not zone_id:
+                failed_count += 1
+                app_logger.error(f"[{dom}] Gagal Ubah IP: {err_msg or 'Domain tidak ditemukan di profil CF manapun.'}")
+                if update_queue:
+                    self._update_queue_item(dom, ip_str, prof_name or '', 'Failed', '', err_msg or 'Zone tidak ditemukan')
+                continue
+
+            success, msg = api.upsert_dns_record(zone_id, "A", dom, ip_str, proxied=proxied)
+
+            ns_string = ", ".join(ns_list) if ns_list else ""
+            if success:
+                success_count += 1
+                app_logger.info(f"[{dom}] IP berhasil diubah ke {ip_str} di profil CF '{prof_name}'.")
+                if update_queue:
+                    self._update_queue_item(dom, ip_str, prof_name, 'Success', ns_string, '')
+            else:
+                failed_count += 1
+                app_logger.error(f"[{dom}] Gagal Ubah IP via '{prof_name}': {msg}")
+                if update_queue:
+                    self._update_queue_item(dom, ip_str, prof_name, 'Failed', ns_string, msg)
+
+            time.sleep(0.5)
+
+        self.after(0, lambda: self.finish_process(total, success_count, failed_count))
+
+    def _update_queue_item(self, domain_str, ip_str, prof_name, status, ns_string, err_msg):
+        existing = False
+        for item in self.domains_data:
+            if item.get('domain') == domain_str:
+                item['ip'] = ip_str
+                if prof_name:
+                    item['profile'] = prof_name
+                item['status'] = status
+                if ns_string:
+                    item['nameservers'] = ns_string
+                item['error'] = err_msg
+                existing = True
+                break
+        if not existing:
+            self.domains_data.append({
+                'domain': domain_str,
+                'ip': ip_str,
+                'profile': prof_name,
+                'status': status,
+                'nameservers': ns_string,
+                'error': err_msg
+            })
+        export_utils.save_state(self.domains_data)
+
+    def finish_process(self, total, success_count, failed_count):
+        self.is_processing = False
+        self.btn_submit.configure(state="normal", text="⚡ Mulai Ubah IP (Auto-Detect CF)")
+        self.btn_cancel.configure(state="normal")
+        self.status_lbl.configure(text=f"✅ Selesai: {success_count} sukses, {failed_count} gagal dari {total} domain.")
+
+        self.on_success_callback()
+        messagebox.showinfo(
+            "Ubah IP Selesai",
+            f"Pemrosesan Ubah IP Selesai!\n\n"
+            f"• Total Domain: {total}\n"
+            f"• Sukses: {success_count}\n"
+            f"• Gagal: {failed_count}",
+            parent=self.parent
+        )
+        self.destroy()
+
 class CheckDomainIPDialog(ctk.CTkToplevel):
     def __init__(self, parent, config, prefill_domains=None):
         super().__init__(parent)
@@ -1164,7 +1366,7 @@ class App(ctk.CTk):
         self.btn_start = ctk.CTkButton(row1_frame, text="Start", font=self.bold_font, command=self.start_process, fg_color="#185C37", hover_color="#1B6C40", width=80, height=30, corner_radius=8)
         self.btn_start.pack(side="left", padx=(0, 5))
         
-        self.btn_update_ip = ctk.CTkButton(row1_frame, text="Ubah IP", font=self.bold_font, command=self.start_update_ip_process, fg_color="#D97706", hover_color="#B45309", width=80, height=30, corner_radius=8)
+        self.btn_update_ip = ctk.CTkButton(row1_frame, text="Ubah IP", font=self.bold_font, command=lambda: self.open_update_ip_dialog(), fg_color="#D97706", hover_color="#B45309", width=80, height=30, corner_radius=8)
         self.btn_update_ip.pack(side="left", padx=5)
 
         self.btn_add_subdomain = ctk.CTkButton(row1_frame, text="+ Subdomain", font=self.bold_font, command=lambda: self.open_add_subdomain_dialog(), fg_color="#0284C7", hover_color="#0369A1", width=100, height=30, corner_radius=8)
@@ -1389,6 +1591,15 @@ class App(ctk.CTk):
 
     def open_add_subdomain_dialog(self, prefill_domain=""):
         dialog = AddSubdomainDialog(
+            parent=self,
+            config=self.config,
+            domains_data=self.domains_data,
+            on_success_callback=self.update_domains_listbox,
+            prefill_domain=prefill_domain
+        )
+
+    def open_update_ip_dialog(self, prefill_domain=""):
+        dialog = UpdateIPDialog(
             parent=self,
             config=self.config,
             domains_data=self.domains_data,
@@ -1744,14 +1955,7 @@ class App(ctk.CTk):
         self.queue_manager.start()
 
     def update_single_domain_dialog(self, domain, item_id):
-        new_ip = self.prompt_input("Ubah IP Domain", f"Masukkan IP Baru untuk {domain}:")
-        if new_ip:
-            new_ip = new_ip.strip()
-            if not is_valid_ipv4(new_ip):
-                messagebox.showerror("Error", "IP Address tidak valid.", parent=self)
-                return
-            
-            threading.Thread(target=self._run_single_ip_update, args=(domain, new_ip), daemon=True).start()
+        self.open_update_ip_dialog(prefill_domain=domain)
 
     def _run_single_ip_update(self, domain, new_ip):
         app_logger.info(f"Mencari profil & memperbarui IP untuk {domain} ke {new_ip}...")

@@ -1,9 +1,10 @@
 {
-    "version": "1.3.0",
-    "download_url": "https://github.com/silent404s/cloudflare-domain-manager/raw/main/Output/CloudflareBulkDomain_Setup_v1.3.0.exe",
+    "version": "1.3.1",
+    "download_url": "https://github.com/silent404s/cloudflare-domain-manager/raw/main/Output/CloudflareBulkDomain_Setup_v1.3.1.exe",
     "html_url": "https://github.com/silent404s/cloudflare-domain-manager/releases",
-    "release_notes": "✨ Versi 1.3.0 Rilis Pembaruan:\n- Fitur Ubah IP Otomatis Auto-Detect profil Cloudflare (Single & Bulk)\n- Perbaikan installer saat update (menutup aplikasi lama secara otomatis tanpa Access Denied error)\n- Peningkatan kecepatan pencarian zone Cloudflare\n- Fitur Cek IP & Profil CF & Copy Fleksibel per-kolom"
+    "release_notes": "✨ Versi 1.3.1 Rilis Pembaruan:\n- Modal Pop-Up khusus untuk Ubah IP (mirip + Subdomain)\n- Fitur Ubah IP Single & Bulk dengan Auto-Detect profil Cloudflare otomatis\n- Progress bar & Live status pemrosesan Ubah IP\n- Perbaikan installer auto-close tanpa error Access Denied"
 }
+
 
 
 
